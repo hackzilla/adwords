@@ -13,6 +13,12 @@ In root of symfony2 project:
 
 git clone git://github.com/hackzilla/Adwords.git vendor/adwords
 
+Add to deps
+-----------
+
+[Adwords]
+    git=git://github.com/hackzilla/Adwords.git
+
 
 Add to the autoload.php
 -----------------------

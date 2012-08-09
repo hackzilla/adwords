@@ -1,7 +1,7 @@
 Adwords
 =======
 
-Google Adwords Vendor for Symfony2
+Google Adwords Vendor for Symfony2 (v2.0)
 
 Uses Google Adwords API version 3.1.1
 

@@ -1,0 +1,13 @@
+{
+    "name": "hackzilla/Adwords",
+    "description": "Wrapper for Google Adwords API",
+    "keywords": ["Google", "Adwords"],
+    "type": "library",
+    "license": "Apache-2.0",
+    "require": {
+        "php": ">=5.3.0"
+    },
+    "autoload":{
+           "classmap":["lib/"]
+     }
+}

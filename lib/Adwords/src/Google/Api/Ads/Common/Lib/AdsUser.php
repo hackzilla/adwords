@@ -1,5 +1,9 @@
 <?php
 /**
+ * User class for all API modules using the Ads API.
+ *
+ * PHP version 5
+ *
  * Copyright 2011, Google Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,21 +24,24 @@
  * @copyright  2011, Google Inc. All Rights Reserved.
  * @license    http://www.apache.org/licenses/LICENSE-2.0 Apache License,
  *             Version 2.0
- * @author     Adam Rogal <api.arogal@gmail.com>
- * @author     Eric Koleda <eric.koleda@google.com>
- * @author     Vincent Tsao <api.vtsao@gmail.com>
+ * @author     Adam Rogal
+ * @author     Eric Koleda
+ * @author     Vincent Tsao
  */
-require_once dirname(__FILE__) . '/../Util/Logger.php';
-require_once dirname(__FILE__) . '/../Util/PeclOAuthHandler.php';
-require_once dirname(__FILE__) . '/../Util/AndySmithOAuthHandler.php';
-require_once dirname(__FILE__) . '/../Util/SimpleOAuth2Handler.php';
-require_once 'SoapClientFactory.php';
-require_once 'ValidationException.php';
+require_once 'Google/Api/Ads/Common/Util/Logger.php';
+require_once 'Google/Api/Ads/Common/Util/SimpleOAuth2Handler.php';
+require_once 'Google/Api/Ads/Common/Lib/SoapClientFactory.php';
+require_once 'Google/Api/Ads/Common/Lib/ValidationException.php';
 
 /**
  * User class for all API modules using the Ads API.
+ * @package GoogleApiAdsCommon
+ * @subpackage Lib
  */
 abstract class AdsUser {
+
+  private $libVersion;
+  private $libName;
 
   private $requestHeaderElements;
   private $defaultServer;
@@ -44,8 +51,6 @@ abstract class AdsUser {
   private $soapCompressionLevel;
   private $wsdlCache;
   private $authServer;
-  private $oauthInfo;
-  private $oauthHandler;
   private $oauth2Info;
   private $oauth2Handler;
 
@@ -55,11 +60,16 @@ abstract class AdsUser {
    */
   protected function __construct() {
     $this->requestHeaderElements = array();
+
+    $buildIni = parse_ini_file(dirname(__FILE__) .
+        '/../Lib/build.ini', FALSE);
+    $this->libVersion = $buildIni['LIB_VERSION'];
+    $this->libName = $buildIni['LIB_NAME'];
   }
 
   /**
    * Gets the authenticaiton value for the <var>$authVar</var> supplied. If
-   * the <var>$authVar</var> is set, it is is used. Otherwirse, the supplied
+   * the <var>$authVar</var> is set, it is is used. Otherwise, the supplied
    * <var>$authenticationIni</var> is queired for the variable. If none is found
    * <var>NULL</var> is returned.
    * @param string $authVar the default value for the authenticaiton variable
@@ -163,7 +173,6 @@ abstract class AdsUser {
     Logger::SetLogLevel(Logger::$REQUEST_INFO_LOG, Logger::$INFO);
   }
 
-
   /**
    * Loads the settings for this client library. If the settings INI file
    * located at <var>$settingsIniPath</var> cannot be loaded, then the
@@ -192,6 +201,7 @@ abstract class AdsUser {
     $libLogDirPath = $this->GetSetting($settingsIni, 'LOGGING',
         'LIB_LOG_DIR_PATH', $defaultLogsDir);
     $relativePath = realpath($logsRelativePathBase . '/' . $libLogDirPath);
+
     if ($pathRelative && $relativePath) {
       $this->logsDirectory = $relativePath;
     } elseif (!$pathRelative && $libLogDirPath) {
@@ -242,25 +252,9 @@ abstract class AdsUser {
     // Auth settings.
     $this->authServer = $this->GetSetting($settingsIni, 'AUTH', 'AUTH_SERVER',
         'https://accounts.google.com');
-    // OAuth 1.0a.
-    $oauthHandlerClass = $this->GetSetting($settingsIni, 'AUTH',
-        'OAUTH_HANDLER_CLASS');
-    if (!isset($oauthHandlerClass)) {
-      $extensions = get_loaded_extensions();
-      if (in_array('OAuth', $extensions)) {
-        $oauthHandlerClass = 'PeclOAuthHandler';
-      } else {
-        $oauthHandlerClass = 'AndySmithOAuthHandler';
-      }
-    }
-    $this->oauthHandler = new $oauthHandlerClass();
     // OAuth2.
-    $oauth2HandlerClass = $this->GetSetting($settingsIni, 'AUTH',
-        'OAUTH2_HANDLER_CLASS');
-    if (!isset($oauth2HandlerClass)) {
-      $oauth2HandlerClass = 'SimpleOAuth2Handler';
-    }
-    $this->oauth2Handler = new $oauth2HandlerClass($this->authServer);
+    $this->oauth2Handler = $this->GetDefaultOAuth2Handler(
+        $this->GetSetting($settingsIni, 'AUTH', 'OAUTH2_HANDLER_CLASS'));
 
     // SSL settings.
     $sslVerifyPeer = $this->GetSetting($settingsIni, 'SSL', 'VERIFY_PEER');
@@ -386,38 +380,6 @@ abstract class AdsUser {
   }
 
   /**
-   * Gets the OAuth info for this user.
-   * @return array the OAuth info for this user
-   */
-  public function GetOAuthInfo() {
-    return $this->oauthInfo;
-  }
-
-  /**
-   * Sets the OAuth info for this user.
-   * @param array $oauthInfo the OAuth info for this user
-   */
-  public function SetOAuthInfo($oauthInfo) {
-    $this->oauthInfo = $oauthInfo;
-  }
-
-  /**
-   * Gets the OAuth handler for this user.
-   * @return OAuthHandler the OAuth handler for this user
-   */
-  public function GetOAuthHandler() {
-    return $this->oauthHandler;
-  }
-
-  /**
-   * Sets the OAuth handler for this user.
-   * @param array $oauthHandler the OAuth handler for this user
-   */
-  public function SetOAuthHandler($oauthHandler) {
-    $this->oauthHandler = $oauthHandler;
-  }
-
-  /**
    * Gets the OAuth2 info for this user.
    * @return array the OAuth2 info for this user
    */
@@ -467,10 +429,11 @@ abstract class AdsUser {
    * Gets common PHP user agent parts for ads client libraries such as PHP
    * version, operating system, browser, or if compression is being used or not.
    * @return array An array of arrays with each inner array representing a user
-   *     agent parts, e.g.: ['php', '5.3.2'] or ['php', '5.4.0'].
+   *     agent parts, e.g.: ['PHP', '5.3.2'] or ['PHP', '5.4.0'].
    */
   private function GetCommonClientLibraryUserAgentParts() {
-    return array(array('php', PHP_VERSION));
+    return array(array($this->libName, $this->libVersion), array('PHP',
+        PHP_VERSION));
   }
 
   /**
@@ -513,118 +476,11 @@ abstract class AdsUser {
   }
 
   /**
-   * Requests a new OAuth token.
-   * @param $callbackUrl the URL to return to after the token is authorized
-   * @param $server the AdWords API server that requests will be made to
-   * @param $applicationName the optional application name to present to the
-   *     user during token authorization
+   * Get the default OAuth2 Handler for this user.
+   * @param NULL|string $className the name of the oauth2Handler class or NULL
+   * @return mixed the configured OAuth2Handler class
    */
-  public function RequestOAuthToken($callbackUrl = NULL, $server = NULL,
-      $applicationName = NULL) {
-    $server = isset($server) ? $server : $this->GetDefaultServer();
-    $scope = $this->GetOAuthScope($server);
-    $this->oauthInfo = $this->GetOAuthHandler()->GetRequestToken(
-        $this->oauthInfo, $scope, $this->GetAuthServer(), $callbackUrl,
-        $applicationName);
-  }
-
-  /**
-   * Gets the OAuth authorization URL for the OAuth token.
-   * @returns string the URL used to authorize the token
-   */
-  public function GetOAuthAuthorizationUrl() {
-    return $this->GetOAuthHandler()->GetAuthorizationUrl($this->oauthInfo,
-        $this->GetAuthServer());
-  }
-
-  /**
-   * Upgrades the authorized OAuth token.
-   * @param string $verifier the verifier string returned from authorizing the
-   *     token
-   */
-  public function UpgradeOAuthToken($verifier) {
-    $this->oauthInfo = $this->GetOAuthHandler()->GetAccessToken(
-        $this->oauthInfo, $verifier, $this->GetAuthServer());
-  }
-
-  /**
-   * Validates that the OAuth info is complete.
-   * @throws ValidationException if there are any validation errors
-   * @access protected
-   */
-  protected function ValidateOAuthInfo() {
-    if (!array_key_exists('oauth_consumer_key', $this->oauthInfo)) {
-      throw new ValidationException('oauthInfo', NULL,
-          'oauth_consumer_key is required and cannot be NULL.');
-    }
-    if (!array_key_exists('oauth_consumer_secret', $this->oauthInfo)) {
-      throw new ValidationException('oauthInfo', NULL,
-          'oauth_consumer_secret is required and cannot be NULL.');
-    }
-    if (!array_key_exists('oauth_token', $this->oauthInfo)) {
-      throw new ValidationException('oauthInfo', NULL,
-          'oauth_token is required and cannot be NULL.');
-    }
-    if (!array_key_exists('oauth_token_secret', $this->oauthInfo)) {
-      throw new ValidationException('oauthInfo', NULL,
-          'oauth_token_secret is required and cannot be NULL.');
-    }
-  }
-
-  /**
-   * Gets the OAuth2 authorization URL.
-   * @param string $redirectUri optional callback URL
-   * @param boolean $offline if offline mode is requested, false by default
-   * @param array $params optional array of additional parameters to include
-   *     in the URL
-   * @return string the URL used to redirect the user to to authorize the token
-   */
-  public function GetOAuth2AuthorizationUrl($redirectUri = NULL,
-      $offline = NULL, array $params = null) {
-    $server = isset($server) ? $server : $this->GetDefaultServer();
-    $scope = $this->GetOAuth2Scope($server);
-    return $this->GetOAuth2Handler()->GetAuthorizationUrl($this->oauth2Info,
-        $scope, $redirectUri, $offline, $params);
-  }
-
-  /**
-   * Gets an OAuth2 access token after it's been authorized, also saving it
-   * on the user.
-   * @param string $code the authorization code returned in the response
-   * @param string $redirectUri optional callback URL
-   * @return array the updated OAuth2 info
-   */
-  public function GetOAuth2AccessToken($code, $redirectUri = NULL) {
-    $this->oauth2Info = $this->GetOAuth2Handler()->GetAccessToken(
-        $this->oauth2Info, $code, $redirectUri);
-    return $this->oauth2Info;
-  }
-
-  /**
-   * Determines if the OAuth2 access token is still valid.
-   * @return boolean true if the access token is still valid
-   */
-  public function IsOAuth2AccessTokenValid() {
-    return $this->GetOAuth2Handler()->IsAccessTokenValid($this->oauth2Info);
-  }
-
-  /**
-   * Determines if the OAuth2 access token can be refreshed.
-   * @return boolean true if the access token can be refreshed
-   */
-  public function CanRefreshOAuth2AccessToken() {
-    return $this->GetOAuth2Handler()->CanRefreshAccessToken($this->oauth2Info);
-  }
-
-  /**
-   * Refreshes the access token, saving it on the user.
-   * @return array the updated OAuth2 info
-   */
-  public function RefreshOAuth2AccessToken() {
-    $this->oauth2Info = $this->GetOAuth2Handler()->RefreshAccessToken(
-        $this->oauth2Info);
-    return $this->oauth2Info;
-  }
+  public abstract function GetDefaultOAuth2Handler($className = NULL);
 
   /**
    * Validates that the OAuth2 info is complete.
@@ -632,32 +488,18 @@ abstract class AdsUser {
    * @access protected
    */
   protected function ValidateOAuth2Info() {
-    if (empty($this->oauth2Info['client_id'])) {
-      throw new ValidationException('oauth2Info', NULL,
-          'client_id is required.');
+    $requiredFields = array('client_id', 'client_secret');
+    foreach ($requiredFields as $field) {
+      if (empty($this->oauth2Info[$field])) {
+        throw new ValidationException($field, NULL,
+            sprintf('%s is required.', $field));
+      }
     }
-    if (empty($this->oauth2Info['client_secret'])) {
-      throw new ValidationException('oauth2Info', NULL,
-          'client_secret is required.');
-    }
-    if (empty($this->oauth2Info['access_token']) &&
-        empty($this->oauth2Info['refresh_token'])) {
-      throw new ValidationException('oauth2Info', NULL,
-          'access_token or refresh_token is required.');
+    if (empty($this->oauth2Info['access_token'])
+        && empty($this->oauth2Info['refresh_token'])) {
+      throw new ValidationException('refresh_token', NULL,
+          'Either the refresh_token or the access_token is required.');
     }
   }
-
-  /**
-   * Gets the OAuth scope for this user.
-   * @param string $server the API server that requests will be made to
-   * @return string the scope to use when requesting an OAuth token
-   */
-  abstract protected function GetOAuthScope($server = NULL);
-
-  /**
-   * Gets the OAuth2 scope for this user.
-   * @param string $server the API server that requests will be made to
-   * @return string the scope to use when requesting an OAuth2 token
-   */
-  abstract protected function GetOAuth2Scope($server = NULL);
 }
+

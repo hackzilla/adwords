@@ -1,5 +1,9 @@
 <?php
 /**
+ * A collection of utility methods for working with cURL.
+ *
+ * PHP version 5
+ *
  * Copyright 2011, Google Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,12 +24,14 @@
  * @copyright  2011, Google Inc. All Rights Reserved.
  * @license    http://www.apache.org/licenses/LICENSE-2.0 Apache License,
  *             Version 2.0
- * @author     Eric Koleda <eric.koleda@google.com>
- * @author     Vincent Tsao <api.vtsao@gmail.com>
+ * @author     Eric Koleda
+ * @author     Vincent Tsao
  */
 
 /**
  * A collection of utility methods for working with cURL.
+ * @package GoogleApiAdsCommon
+ * @subpackage Util
  */
 class CurlUtils {
 
@@ -133,3 +139,4 @@ class CurlUtils {
     curl_close($ch);
   }
 }
+

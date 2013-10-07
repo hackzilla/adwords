@@ -24,11 +24,9 @@
  * @copyright  2011, Google Inc. All Rights Reserved.
  * @license    http://www.apache.org/licenses/LICENSE-2.0 Apache License,
  *             Version 2.0
- * @author     Adam Rogal <api.arogal@gmail.com>
+ * @author     Adam Rogal
  * @see        AdsSoapClient
  */
-
-/** Required classes. **/
 require_once dirname(__FILE__) . '/../../Common/Lib/AdsSoapClient.php';
 
 /**
@@ -37,6 +35,7 @@ require_once dirname(__FILE__) . '/../../Common/Lib/AdsSoapClient.php';
  * @subpackage Lib
  */
 class AdWordsSoapClient extends AdsSoapClient {
+
   /**
    * Constructor for the AdWords API SOAP client.
    * @param string $wsdl URI of the WSDL file or <var>NULL</var> if working in
@@ -54,8 +53,8 @@ class AdWordsSoapClient extends AdsSoapClient {
   }
 
   /**
-   * Overrides the method __doRequest().  When OAuth or OAuth2 authentication is
-   * used the URL parameters added.
+   * Overrides the method __doRequest(). When OAuth2 authentication is used the
+   * URL parameters added.
    * @param string $request the request XML
    * @param string $location the URL to request
    * @param string $action the SOAP action
@@ -65,21 +64,12 @@ class AdWordsSoapClient extends AdsSoapClient {
    */
   function __doRequest($request , $location , $action , $version,
       $one_way = 0) {
-    $oAuthInfo = $this->user->GetOAuthInfo();
     $oAuth2Info = $this->user->GetOAuth2Info();
-    if (isset($oAuthInfo)) {
-      $oauthParameters =
-          $this->user->GetOAuthHandler()->GetSignedRequestParameters(
-              $oAuthInfo, $location, 'POST');
-      $location .= '?' . $this->user->GetOAuthHandler()->FormatParametersForUrl(
-          $oauthParameters);
-    } elseif (isset($oAuth2Info)) {
-      if (!$this->user->IsOAuth2AccessTokenValid() &&
-          $this->user->CanRefreshOAuth2AccessToken()) {
-        $oAuth2Info = $this->user->RefreshOAuth2AccessToken();
-      }
-      $oauth2Parameters =
-          $this->user->GetOAuth2Handler()->FormatCredentialsForUrl($oAuth2Info);
+    $oAuth2Handler = $this->user->GetOAuth2Handler();
+    if (!empty($oAuth2Info)) {
+      $oAuth2Info = $oAuth2Handler->GetOrRefreshAccessToken($oAuth2Info);
+      $this->user->SetOAuth2Info($oAuth2Info);
+      $oauth2Parameters = $oAuth2Handler->FormatCredentialsForUrl($oAuth2Info);
       $location .= '?' . $oauth2Parameters;
     }
     return parent::__doRequest($request, $location, $action, $version);
@@ -116,9 +106,7 @@ class AdWordsSoapClient extends AdsSoapClient {
    * @return string the effective user the request was made against
    */
   public function GetEffectiveUser() {
-    return $this->GetAdsUser()->GetClientId()
-        ? $this->GetAdsUser()->GetClientId()
-        : $this->GetAdsUser()->GetEmail();
+    return $this->GetAdsUser()->GetClientCustomerId();
   }
 
   /**
@@ -222,3 +210,4 @@ class AdWordsSoapClient extends AdsSoapClient {
         . ' faultMessage=' . $this->GetLastFaultMessage();
   }
 }
+

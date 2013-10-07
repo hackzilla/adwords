@@ -1,5 +1,9 @@
 <?php
 /**
+ * A collection of utility methods for working with reports.
+ *
+ * PHP version 5
+ *
  * Copyright 2011, Google Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,8 +24,8 @@
  * @copyright  2011, Google Inc. All Rights Reserved.
  * @license    http://www.apache.org/licenses/LICENSE-2.0 Apache License,
  *             Version 2.0
- * @author     Eric Koleda <api.ekoleda@gmail.com>
- * @author     Vincent Tsao <api.vtsao@gmail.com>
+ * @author     Eric Koleda
+ * @author     Vincent Tsao
  */
 require_once dirname(__FILE__) . '/../Lib/AdWordsUser.php';
 require_once dirname(__FILE__) . '/../../Common/Util/CurlUtils.php';
@@ -30,8 +34,12 @@ require_once dirname(__FILE__) . '/../../Common/Util/XmlUtils.php';
 
 /**
  * A collection of utility methods for working with reports.
+ * @package GoogleApiAdsAdWords
+ * @subpackage Util
  */
 class ReportUtils {
+
+  const CLIENT_LOGIN_FORMAT = 'GoogleLogin auth=%s';
 
   /**
    * The log name to use when logging requests.
@@ -125,7 +133,7 @@ class ReportUtils {
    */
   private static function DownloadReportFromUrl($url, $headers, $params,
       $path = NULL) {
-    /* 
+    /*
      * This method should not be static and instantiation of this class should
      * be allowed so we can "inject" CurlUtils, but would break too many things
      * that rely on this method being static.
@@ -182,7 +190,7 @@ class ReportUtils {
              "'%s'. ", $apiError->type, $apiError->trigger,
               $apiError->fieldPath);
         }
-        $exception = new ReportDownloadException($errorMessage, $code);        
+        $exception = new ReportDownloadException($errorMessage, $code);
       } else if (preg_match(self::$ERROR_MESSAGE_REGEX, $snippet, $matches)) {
         $exception = new ReportDownloadException($matches[2], $code);
       } else if (!empty($error)) {
@@ -208,7 +216,7 @@ class ReportUtils {
    * Tries to parse the error response xml from the AdWords API server as an
    * object. This method is used in parsing all error responses when API
    * version >= v201209, and in other versions when apiMode header is mentioned
-   * in the request headers. 
+   * in the request headers.
    *
    * @param String $responseXml the error response xml
    * @return Object the parsed error object, or null if the response cannot
@@ -228,7 +236,7 @@ class ReportUtils {
     }
     return $retval;
   }
-  
+
   /**
    * Generates the URL to use for the download request.
    * @param AdWordsUser $user the AdWordsUser to make the request for
@@ -296,38 +304,25 @@ class ReportUtils {
     $version = !empty($options['version']) ? $options['version'] :
         $user->GetDefaultVersion();
     // Authorization.
-    if ($user->GetOAuthInfo()) {
-      $oauthParams = $user->GetOAuthHandler()->GetSignedRequestParameters(
-          $user->GetOAuthInfo(), $url, 'POST');
-      $headers['Authorization'] = 'OAuth '
-          . $user->GetOAuthHandler()->FormatParametersForHeader($oauthParams);
-    } elseif ($user->GetOAuth2Info()) {
-      if (!$user->IsOAuth2AccessTokenValid() &&
-          $user->CanRefreshOAuth2AccessToken()) {
-        $user->RefreshOAuth2AccessToken();
-      }
-      $oauth2Header = $user->GetOAuth2Handler()->FormatCredentialsForHeader(
-          $user->GetOAuth2Info());
-      $headers['Authorization'] = $oauth2Header;
+    $authHeader = NULL;
+    $oAuth2Info = $user->GetOAuth2Info();
+    $oAuth2Handler = $user->GetOAuth2Handler();
+    if (!empty($oAuth2Info)) {
+      $oAuth2Info = $oAuth2Handler->GetOrRefreshAccessToken($oAuth2Info);
+      $user->SetOAuth2Info($oAuth2Info);
+      $authHeader = $oAuth2Handler->FormatCredentialsForHeader($oAuth2Info);
     } else {
-      $headers['Authorization']= 'GoogleLogin auth=' . $user->GetAuthToken();
+      $authHeader = sprintf(self::CLIENT_LOGIN_FORMAT, $user->GetAuthToken());
     }
+    $headers['Authorization'] = $authHeader;
+
     // Developer token.
     $headers['developerToken'] = $user->GetDeveloperToken();
     // Target client.
     $email = $user->GetEmail();
-    $clientId = $user->GetClientId();
-    if (isset($clientId)) {
-      if (strpos($clientId, '@') !== FALSE) {
-        if ($version < 'v201109') {
-          $headers['clientEmail'] = $clientId;
-        } else {
-          throw new ReportDownloadException('Client emails are not supported '
-              . 'in versions v201109 and later.');
-        }
-      } else {
-        $headers['clientCustomerId'] = $clientId;
-      }
+    $clientCustomerId = $user->GetClientCustomerId();
+    if (isset($clientCustomerId)) {
+      $headers['clientCustomerId'] = $clientCustomerId;
     } else {
       if ($version < 'v201109' && isset($email)) {
         $headers['clientEmail'] = $email;
@@ -390,3 +385,468 @@ class ReportDownloadException extends Exception {
     parent::__construct($error, $httpCode);
   }
 }
+
+if (!class_exists("ReportDefinition", FALSE)) {
+  /**
+   * Represents a report definition.
+   * @package GoogleApiAdsAdWords
+   * @subpackage Util
+   */
+  class ReportDefinition {
+    /**
+     * @access public
+     * @var integer
+     */
+    public $id;
+
+    /**
+     * @access public
+     * @var Selector
+     */
+    public $selector;
+
+    /**
+     * @access public
+     * @var string
+     */
+    public $reportName;
+
+    /**
+     * @access public
+     * @var tnsReportDefinitionReportType
+     */
+    public $reportType;
+
+    /**
+     * @access public
+     * @var boolean
+     */
+    public $hasAttachment;
+
+    /**
+     * @access public
+     * @var tnsReportDefinitionDateRangeType
+     */
+    public $dateRangeType;
+
+    /**
+     * @access public
+     * @var tnsDownloadFormat
+     */
+    public $downloadFormat;
+
+    /**
+     * @access public
+     * @var string
+     */
+    public $creationTime;
+
+    /**
+     * @access public
+     * @var boolean
+     */
+    public $includeZeroImpressions;
+
+    /**
+     * Gets the namesapce of this class
+     * @return the namespace of this class
+     */
+    public function getNamespace() {
+      return "";
+    }
+
+    /**
+     * Gets the xsi:type name of this class
+     * @return the xsi:type name of this class
+     */
+    public function getXsiTypeName() {
+      return "ReportDefinition";
+    }
+
+    public function __construct($id = NULL, $selector = NULL, $reportName = NULL, $reportType = NULL, $hasAttachment = NULL, $dateRangeType = NULL, $downloadFormat = NULL, $creationTime = NULL, $includeZeroImpressions = NULL) {
+      $this->id = $id;
+      $this->selector = $selector;
+      $this->reportName = $reportName;
+      $this->reportType = $reportType;
+      $this->hasAttachment = $hasAttachment;
+      $this->dateRangeType = $dateRangeType;
+      $this->downloadFormat = $downloadFormat;
+      $this->creationTime = $creationTime;
+      $this->includeZeroImpressions = $includeZeroImpressions;
+    }
+  }
+}
+
+if (!class_exists("Selector", FALSE)) {
+  /**
+   * A generic selector to specify the type of information to return.
+   * @package GoogleApiAdsAdWords
+   * @subpackage Util
+   */
+  class Selector {
+    /**
+     * @access public
+     * @var string[]
+     */
+    public $fields;
+
+    /**
+     * @access public
+     * @var Predicate[]
+     */
+    public $predicates;
+
+    /**
+     * @access public
+     * @var DateRange
+     */
+    public $dateRange;
+
+    /**
+     * @access public
+     * @var OrderBy[]
+     */
+    public $ordering;
+
+    /**
+     * @access public
+     * @var Paging
+     */
+    public $paging;
+
+    /**
+     * Gets the namesapce of this class
+     * @return the namespace of this class
+     */
+    public function getNamespace() {
+      return "";
+    }
+
+    /**
+     * Gets the xsi:type name of this class
+     * @return the xsi:type name of this class
+     */
+    public function getXsiTypeName() {
+      return "Selector";
+    }
+
+    public function __construct($fields = NULL, $predicates = NULL, $dateRange = NULL, $ordering = NULL, $paging = NULL) {
+      $this->fields = $fields;
+      $this->predicates = $predicates;
+      $this->dateRange = $dateRange;
+      $this->ordering = $ordering;
+      $this->paging = $paging;
+    }
+  }
+}
+
+if (!class_exists("Predicate", FALSE)) {
+  /**
+   * Specifies how an entity (eg. adgroup, campaign, criterion, ad) should be filtered.
+   * @package GoogleApiAdsAdWords
+   * @subpackage Util
+   */
+  class Predicate {
+    /**
+     * @access public
+     * @var string
+     */
+    public $field;
+
+    /**
+     * @access public
+     * @var tnsPredicateOperator
+     */
+    public $operator;
+
+    /**
+     * @access public
+     * @var string[]
+     */
+    public $values;
+
+    /**
+     * Gets the namesapce of this class
+     * @return the namespace of this class
+     */
+    public function getNamespace() {
+      return "";
+    }
+
+    /**
+     * Gets the xsi:type name of this class
+     * @return the xsi:type name of this class
+     */
+    public function getXsiTypeName() {
+      return "Predicate";
+    }
+
+    public function __construct($field = NULL, $operator = NULL, $values = NULL) {
+      $this->field = $field;
+      $this->operator = $operator;
+      $this->values = $values;
+    }
+  }
+}
+
+if (!class_exists("PredicateOperator", FALSE)) {
+  /**
+   * Defines the valid set of operators.
+   * @package GoogleApiAdsAdWords
+   * @subpackage Util
+   */
+  class PredicateOperator {
+    /**
+     * Gets the namesapce of this class
+     * @return the namespace of this class
+     */
+    public function getNamespace() {
+      return "";
+    }
+
+    /**
+     * Gets the xsi:type name of this class
+     * @return the xsi:type name of this class
+     */
+    public function getXsiTypeName() {
+      return "Predicate.Operator";
+    }
+
+    public function __construct() {}
+  }
+}
+
+if (!class_exists("DateRange", FALSE)) {
+/**
+ * Represents a range of dates that has either an upper or a lower bound.
+ * The format for the date is YYYYMMDD.
+ * @package GoogleApiAdsAdWords
+ * @subpackage Util
+ */
+class DateRange {
+  /**
+   * @access public
+   * @var string
+   */
+  public $min;
+
+  /**
+   * @access public
+   * @var string
+   */
+  public $max;
+
+  /**
+   * Gets the namesapce of this class
+   * @return the namespace of this class
+   */
+  public function getNamespace() {
+    return "";
+  }
+
+  /**
+   * Gets the xsi:type name of this class
+   * @return the xsi:type name of this class
+   */
+  public function getXsiTypeName() {
+    return "DateRange";
+  }
+
+  public function __construct($min = NULL, $max = NULL) {
+    $this->min = $min;
+    $this->max = $max;
+  }
+}}
+
+if (!class_exists("OrderBy", FALSE)) {
+/**
+ * Specifies how the resulting information should be sorted.
+ * @package GoogleApiAdsAdWords
+ * @subpackage Util
+ */
+class OrderBy {
+  /**
+   * @access public
+   * @var string
+   */
+  public $field;
+
+  /**
+   * @access public
+   * @var tnsSortOrder
+   */
+  public $sortOrder;
+
+  /**
+   * Gets the namesapce of this class
+   * @return the namespace of this class
+   */
+  public function getNamespace() {
+    return "";
+  }
+
+  /**
+   * Gets the xsi:type name of this class
+   * @return the xsi:type name of this class
+   */
+  public function getXsiTypeName() {
+    return "OrderBy";
+  }
+
+  public function __construct($field = NULL, $sortOrder = NULL) {
+    $this->field = $field;
+    $this->sortOrder = $sortOrder;
+  }
+}}
+
+if (!class_exists("Paging", FALSE)) {
+/**
+ * Specifies the page of results to return in the response. A page is specified
+ * by the result position to start at and the maximum number of results to
+ * return.
+ * @package GoogleApiAdsAdWords
+ * @subpackage Util
+ */
+class Paging {
+  /**
+   * @access public
+   * @var integer
+   */
+  public $startIndex;
+
+  /**
+   * @access public
+   * @var integer
+   */
+  public $numberResults;
+
+  /**
+   * Gets the namesapce of this class
+   * @return the namespace of this class
+   */
+  public function getNamespace() {
+    return "";
+  }
+
+  /**
+   * Gets the xsi:type name of this class
+   * @return the xsi:type name of this class
+   */
+  public function getXsiTypeName() {
+    return "Paging";
+  }
+
+  public function __construct($startIndex = NULL, $numberResults = NULL) {
+    $this->startIndex = $startIndex;
+    $this->numberResults = $numberResults;
+  }
+}}
+
+if (!class_exists("SortOrder", FALSE)) {
+/**
+ * Possible orders of sorting.
+ * @package GoogleApiAdsAdWords
+ * @subpackage Util
+ */
+class SortOrder {
+  /**
+   * Gets the namesapce of this class
+   * @return the namespace of this class
+   */
+  public function getNamespace() {
+    return "";
+  }
+
+  /**
+   * Gets the xsi:type name of this class
+   * @return the xsi:type name of this class
+   */
+  public function getXsiTypeName() {
+    return "SortOrder";
+  }
+
+  public function __construct() {}
+}}
+
+if (!class_exists("ReportDefinitionReportType", FALSE)) {
+/**
+ * Enums for report types.
+ * @package GoogleApiAdsAdWords
+ * @subpackage Util
+ */
+class ReportDefinitionReportType {
+  /**
+   * Gets the namesapce of this class
+   * @return the namespace of this class
+   */
+  public function getNamespace() {
+    return "";
+  }
+
+  /**
+   * Gets the xsi:type name of this class
+   * @return the xsi:type name of this class
+   */
+  public function getXsiTypeName() {
+    return "ReportDefinition.ReportType";
+  }
+
+  public function __construct() {}
+}}
+
+if (!class_exists("ReportDefinitionDateRangeType", FALSE)) {
+/**
+ * Enums for date range of report.
+ * @package GoogleApiAdsAdWords
+ * @subpackage Util
+ */
+class ReportDefinitionDateRangeType {
+  /**
+   * Gets the namesapce of this class
+   * @return the namespace of this class
+   */
+  public function getNamespace() {
+    return "";
+  }
+
+  /**
+   * Gets the xsi:type name of this class
+   * @return the xsi:type name of this class
+   */
+  public function getXsiTypeName() {
+    return "ReportDefinition.DateRangeType";
+  }
+
+  public function __construct() {}
+}}
+
+if (!class_exists("DownloadFormat", FALSE)) {
+/**
+ * Enum class that describes the supported formats for content downloads.
+ * The order mimics the order in which download options are presented in the
+ * legacy report center.
+ * @package GoogleApiAdsAdWords
+ * @subpackage Util
+ */
+class DownloadFormat {
+  /**
+   * Gets the namesapce of this class
+   * @return the namespace of this class
+   */
+  public function getNamespace() {
+    return "";
+  }
+
+  /**
+   * Gets the xsi:type name of this class
+   * @return the xsi:type name of this class
+   */
+  public function getXsiTypeName() {
+    return "DownloadFormat";
+  }
+
+  public function __construct() {
+    if(get_parent_class('DownloadFormat')) parent::__construct();
+  }
+}}
+

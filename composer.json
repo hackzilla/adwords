@@ -1,11 +1,11 @@
 {
-    "name": "hackzilla/Adwords",
+    "name": "hackzilla/adwords",
     "description": "Wrapper for Google Adwords API",
-    "keywords": ["Google", "Adwords"],
+    "keywords": ["google", "adwords", "api", "soa", "oap", "soap", "wsdl", "library", "client"],
     "type": "library",
     "license": "Apache-2.0",
     "require": {
-        "php": ">=5.3.0"
+        "php": ">=5.3.2"
     },
     "autoload":{
            "classmap":["lib/"]

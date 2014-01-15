@@ -1,3 +1,12 @@
+DEPRECATED 
+==========
+
+Google now maintain their client on Github.
+
+https://github.com/googleads/googleads-php-lib
+
+
+
 Adwords
 =======
 
